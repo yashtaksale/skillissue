@@ -1,0 +1,52 @@
+name: Nightly Eval
+
+on:
+  schedule:
+    - cron: "0 3 * * *"  # 3 AM UTC daily
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      DATABASE_URL: postgresql+asyncpg://skillissue:skillissue@localhost:5432/skillissue
+      REDIS_URL: redis://localhost:6379/0
+      LLM_MODE: live
+      PIPELINE_VERSION: "0.1.0"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: skillissue
+          POSTGRES_PASSWORD: skillissue
+          POSTGRES_DB: skillissue
+        ports: ["127.0.0.1:5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U skillissue"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["127.0.0.1:6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v1
+      - run: uv sync --frozen
+      - run: uv run python -m scripts.eval
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: |
+            **/eval_report.json
+            **/eval_report.md
+          retention-days: 30
