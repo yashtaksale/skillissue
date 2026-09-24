@@ -1,12 +1,12 @@
-"""CLI: `python -m skillissue.cli.acquire <owner/repo>`.
+"""CLI: `python -m skillissue.cli.acquire acquire <owner/repo>`.
 
-Downloads a tarball, walks the tree, builds a manifest, and prints
-a summary to stdout.
+Downloads a tarball via the GitHub API, extracts it safely, walks the tree,
+and prints a JSON summary to stdout.
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
+import asyncio
 import io
 import json
 import os
@@ -19,8 +19,7 @@ from typing import TextIO
 from skillissue.domain.url.exceptions import URLError
 from skillissue.domain.url.models import RepoRef
 from skillissue.domain.url.parser import parse
-from skillissue.pipeline.acquire.downloader import download_tarball
-from skillissue.pipeline.denylist import check_optout, check_denylist, is_denylisted
+from skillissue.pipeline.denylist import check_denylist, check_optout
 from skillissue.pipeline.filter.language import detect
 from skillissue.pipeline.filter.loc import count_loc
 from skillissue.pipeline.filter.manifest import build_manifest
@@ -29,43 +28,40 @@ from skillissue.pipeline.hygiene import check as check_hygiene
 
 
 # =====================================================================
-# Minimal manifest reader from tarball (no full extract needed)
+# Manifest reader from tarball on disk
 # =====================================================================
+
+_LOCKFILE_SUFFIXES = (".lock", ".lockb")
+_LOCKFILE_BASENAMES = {
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "bun.lock", "bun.lockb", "poetry.lock", "Pipfile.lock",
+    "uv.lock", "pdm.lock", "cargo.lock", "go.sum",
+    "gemfile.lock", "composer.lock", "mix.lock",
+}
 
 
 def _read_tarball_manifests(
-    tarball_bytes: bytes,
+    tarball_path: Path,
 ) -> tuple[list[str], list[str]]:
-    """List filenames and lockfile names from an in-memory tarball.
+    """List filenames and lockfile names from a tarball on disk.
 
-    Returns (all_names, lockfile_names).
+    Returns (all_names, lockfile_names), both with the top-level dir stripped.
     """
-    buf = io.BytesIO(tarball_bytes)
-    with tarfile.open(fileobj=buf, mode="r:gz") as tf:
+    with tarfile.open(tarball_path, mode="r:gz") as tf:
         members = tf.getmembers()
 
     all_names: list[str] = []
     lockfile_names: list[str] = []
 
-    _LOCKFILE_SUFFIXES = (".lock", ".lockb")
-    _LOCKFILE_BASENAMES = {
-        "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
-        "bun.lock", "bun.lockb", "poetry.lock", "Pipfile.lock",
-        "uv.lock", "pdm.lock", "cargo.lock", "go.sum",
-        "gemfile.lock", "composer.lock", "mix.lock",
-    }
-
     for m in members:
-        name = m.name
         if m.isdir():
             continue
-        # strip top-level dir (owner-repo-sha/)
-        parts = name.split("/")
+        parts = m.name.split("/")
         if len(parts) <= 1:
             continue
         rel = "/".join(parts[1:])
         all_names.append(rel)
-        bn = name.split("/")[-1].lower()
+        bn = parts[-1].lower()
         if any(bn.endswith(s) for s in _LOCKFILE_SUFFIXES) or bn in _LOCKFILE_BASENAMES:
             lockfile_names.append(rel)
 
@@ -73,169 +69,183 @@ def _read_tarball_manifests(
 
 
 # =====================================================================
-# Coverage + stats
+# Stats
 # =====================================================================
 
-from skillissue.pipeline.coverage import CoverageKind, decide as decide_coverage
+from skillissue.pipeline.coverage import decide as decide_coverage
 
 
-def _compute_stats(
-    files: list,  # list of FileInfo
-    manifest: list[dict],
-) -> dict:
+def _compute_stats(files: list) -> dict:
     loc_total = sum(f.loc for f in files)
-    loc_analyzed = sum(f.loc for f in files)
     lang_counts: dict[str, int] = {}
     for f in files:
         lang_counts[f.lang] = lang_counts.get(f.lang, 0) + 1
 
-    # Determine loc_supported: we count all recognized (non-"unknown") langs as supported
-    loc_supported = sum(f.loc for f in files if f.lang != "unknown")
-
     coverage = decide_coverage(
         loc_total=loc_total,
-        loc_supported=loc_supported,
-        loc_analyzed=loc_analyzed,
+        loc_supported=loc_total,
+        loc_analyzed=loc_total,
         file_count=len(files),
     )
 
-    languages = sorted(lang_counts.keys())
     return {
         "total_files": len(files),
         "total_loc": loc_total,
-        "loc_analyzed": loc_analyzed,
-        "loc_supported": loc_supported,
-        "languages": languages,
+        "languages": sorted(lang_counts.keys()),
         "coverage": coverage.value,
     }
 
 
 # =====================================================================
-# Main acquire command
+# CLI entry point (sync wrapper around async core)
 # =====================================================================
 
 
 def _run_acquire(repo_input: str, output: TextIO = sys.stdout) -> int:
-    # Parse the repo reference
+    """Parse a repo URL, download its tarball, and print a JSON summary."""
     try:
         repo_ref = parse(repo_input)
     except URLError as exc:
         print(f"error: invalid repo reference: {exc}", file=sys.stderr)
         return 2
 
-    # Denylist check
     try:
         check_denylist(repo_ref)
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 3
 
-    # Download tarball
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+
+    try:
+        summary = asyncio.run(_acquire_async(repo_ref, github_token))
+    except URLError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 4
+    except Exception as exc:
+        print(f"error: unexpected: {exc}", file=sys.stderr)
+        return 5
+
+    json.dump(summary, output, indent=2)
+    output.write("\n")
+    return 0
+
+
+async def _acquire_async(repo_ref: RepoRef, github_token: str) -> dict:
+    """Async core: download tarball, extract, walk, analyze."""
+    import httpx
+    from skillissue.pipeline.acquire.extractor import safe_extract
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         print(f"Downloading {repo_ref.full_name}...", file=sys.stderr)
-        try:
-            tarball = download_tarball(
-                repo_ref.owner, repo_ref.repo,
-                sha="a" * 40,  # placeholder; use HEAD
-                dest_dir=tmp,
+
+        # 1. Fetch the default branch SHA for a reproducible tarball.
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=httpx.Timeout(30, connect=10),
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "skillissue/0.1",
+            },
+        ) as client:
+            if github_token:
+                client.headers["Authorization"] = f"Bearer {github_token}"
+            resp = await client.get(
+                f"https://api.github.com/repos/{repo_ref.owner}/{repo_ref.repo}"
             )
-        except Exception as exc:
-            print(f"error: download failed: {exc}", file=sys.stderr)
-            return 4
+            resp.raise_for_status()
+            meta = resp.json()
+            default_branch = meta.get("default_branch", "main")
+            head_resp = await client.get(
+                f"https://api.github.com/repos/{repo_ref.owner}/{repo_ref.repo}"
+                f"/git/ref/heads/{default_branch}"
+            )
+            head_resp.raise_for_status()
+            sha = head_resp.json()["object"]["sha"]
 
-        tarball_bytes = tarball.read_bytes()
+        # 2. Download tarball (streamed to disk, 150 MB cap, 1 retry).
+        from skillissue.pipeline.acquire.downloader import download_tarball
+        tarball_path = await download_tarball(
+            repo_ref.owner, repo_ref.repo,
+            sha=sha, dest_dir=tmp, github_token=github_token,
+        )
+        print(f"Downloaded {tarball_path.stat().st_size // 1024} KB", file=sys.stderr)
 
-        # Extract
+        # 3. Read manifests before extraction.
+        _, lockfile_names = _read_tarball_manifests(tarball_path)
+
+        # 4. Safe extraction with traversal/symlink/size/depth guards.
         extract_dir = tmp / "src"
         extract_dir.mkdir(exist_ok=True)
-        import tarfile as _tf
-        try:
-            with _tf.open(tarball, mode="r:gz") as tf:
-                members = tf.getmembers()
-                # Find the top-level directory
-                top = None
-                for m in members:
-                    parts = m.name.split("/")
-                    if len(parts) > 1 and parts[1] == "":
-                        continue
-                    if len(parts) >= 2:
-                        top = parts[0]
-                        break
-                tf.extractall(path=extract_dir, members=[
-                    m for m in members if top and m.name.startswith(top + "/")
-                ])
-        except Exception as exc:
-            print(f"error: extraction failed: {exc}", file=sys.stderr)
-            return 5
+        safe_extract(tarball_path, extract_dir)
 
-        # Determine the actual source dir
-        src_children = list(extract_dir.iterdir())
+        # 5. Determine actual source dir (strip top-level dir).
+        src_children = sorted(extract_dir.iterdir())
         if len(src_children) == 1 and src_children[0].is_dir():
             src_dir = src_children[0]
         else:
             src_dir = extract_dir
 
-        # Opt-out file check
+        # 6. Opt-out check.
         try:
             check_optout(repo_ref, src_dir)
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
-            return 3
+            raise URLError(str(exc))
 
-        # Walk
-        result = walk(src_dir)
+        # 7. Walk the tree.
+        result: WalkResult = walk(src_dir)
 
-        # Build manifest
-        manifest = build_manifest(result.files)
+        # 8. Build manifest.
+        build_manifest(result.files)
 
-        # Collect all file paths (including subdirectories) for hygiene
+        # 9. Hygiene.
         all_paths = [f.path for f in result.files] + result.manifests
-
-        # Hygiene
         hygiene_flags = check_hygiene(all_paths, src_dir)
 
-        # Stats
-        stats = _compute_stats(result.files, manifest)
+        # 10. Stats.
+        stats = _compute_stats(result.files)
 
-        # Output summary
-        summary = {
+        return {
             "repo": repo_ref.full_name,
+            "ref": default_branch,
+            "commit_sha": sha[:12],
             "files": stats["total_files"],
             "loc": stats["total_loc"],
-            "loc_analyzed": stats["loc_analyzed"],
-            "loc_supported": stats["loc_supported"],
             "languages": stats["languages"],
             "coverage": stats["coverage"],
-            "manifests": result.manifests,
+            "manifests": lockfile_names,
             "hygiene_flags": hygiene_flags,
         }
-        json.dump(summary, output, indent=2)
-        output.write("\n")
 
-    return 0
+
+# =====================================================================
+# CLI entry point
+# =====================================================================
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the CLI."""
     parser = argparse.ArgumentParser(
-        prog="skillissue.cli.acquire",
-        description="Acquire and analyze a GitHub repository.",
+        prog="skillissue-cli",
+        description="SkillIssue — code health scanner (acquire phase).",
     )
     subparsers = parser.add_subparsers(dest="command")
 
     acquire_parser = subparsers.add_parser(
-        "acquire", help="Download and analyze a GitHub repository."
+        "acquire", help="Download and profile a GitHub repository."
     )
     acquire_parser.add_argument(
         "repo",
-        help="GitHub repo URL or OWNER/REPO shorthand.",
+        help="GitHub repo URL or OWNER/REPO shorthand (e.g. octocat/Hello-World).",
     )
 
     args = parser.parse_args(argv)
 
     if args.command == "acquire":
         return _run_acquire(args.repo)
+
     parser.print_help()
     return 1
 

@@ -60,14 +60,25 @@ class _FakeClient:
     def __init__(self, response: _FakeStreamResponse):
         self._response = response
 
+    def stream(self, *args, **kwargs):
+        # Real httpx returns an async context manager from `stream()`.
+        return _FakeStreamCtx(self._response)
+
+    async def aclose(self) -> None:
+        pass
+
+
+class _FakeStreamCtx:
+    """Async context manager returned by `_FakeClient.stream`."""
+
+    def __init__(self, response: _FakeStreamResponse):
+        self._response = response
+
     async def __aenter__(self):
-        return self
+        return self._response
 
     async def __aexit__(self, *exc):
         return False
-
-    async def stream(self, *args, **kwargs):
-        return self._response
 
 
 @pytest.mark.asyncio

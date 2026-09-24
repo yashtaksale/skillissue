@@ -70,7 +70,6 @@ async def download_tarball(
         headers["Authorization"] = f"Bearer {github_token}"
 
     last_error: Exception | None = None
-    close_client = False
 
     for attempt in range(1 + retries):
         tmp_fh, tmp_path_str = tempfile.mkstemp(
@@ -86,41 +85,49 @@ async def download_tarball(
                     _DOWNLOAD_TIMEOUT, connect=10, write=_DOWNLOAD_TIMEOUT
                 ),
             )
-            close_client = True
+            owns_client = True
         else:
             client = _client
+            owns_client = False
 
         try:
-            async with client:
-                response = await client.stream("GET", url, headers=headers)
-                async with response:
-                    response.raise_for_status()
+            # `client.stream()` returns an async context manager directly,
+            # not a coroutine — do not `await` it. The fake test client wraps
+            # its response in a context manager too, so this works in tests.
+            async with client.stream("GET", url, headers=headers) as response:
+                response.raise_for_status()
 
-                    sha256 = hashlib.sha256()
-                    written = 0
-                    with open(tmp_path, "wb") as fh:
-                        async for chunk in response.aiter_bytes(_TARBALL_CHUNK):
-                            sha256.update(chunk)
-                            written += len(chunk)
-                            if written > _MAX_TARBALL_BYTES:
-                                raise TarballTooLargeError(
-                                    f"Tarball exceeded "
-                                    f"{_MAX_TARBALL_BYTES // (1024 * 1024)} MB limit "
-                                    f"({written // (1024 * 1024)} MB received)"
-                                )
-                            fh.write(chunk)
+                sha256 = hashlib.sha256()
+                written = 0
+                with open(tmp_path, "wb") as fh:
+                    async for chunk in response.aiter_bytes(_TARBALL_CHUNK):
+                        sha256.update(chunk)
+                        written += len(chunk)
+                        if written > _MAX_TARBALL_BYTES:
+                            raise TarballTooLargeError(
+                                f"Tarball exceeded "
+                                f"{_MAX_TARBALL_BYTES // (1024 * 1024)} MB limit "
+                                f"({written // (1024 * 1024)} MB received)"
+                            )
+                        fh.write(chunk)
 
             tmp_path.rename(dest_path)
+            if owns_client:
+                await client.aclose()
             return dest_path
 
         except TarballTooLargeError:
             tmp_path.unlink(missing_ok=True)
             dest_path.unlink(missing_ok=True)
+            if owns_client:
+                await client.aclose()
             raise
 
         except Exception as exc:
             last_error = exc
             tmp_path.unlink(missing_ok=True)
+            if owns_client:
+                await client.aclose()
             if attempt < retries:
                 await asyncio.sleep(min(2 ** attempt, 8))
 
