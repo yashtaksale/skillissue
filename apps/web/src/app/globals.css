@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --fg: #0f1117;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --raised: #f9fafb;
+}
+
+.dark {
+  --bg: #0f1117;
+  --fg: #f3f4f6;
+  --muted: #9ca3af;
+  --border: #2d3142;
+  --raised: #1a1d27;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* Score gauge gradient */
+.score-gradient {
+  background: linear-gradient(90deg,
+    var(--heat-raw) 0%,
+    var(--heat-toasted) 25%,
+    var(--heat-medium) 50%,
+    var(--heat-cooked) 75%,
+    var(--heat-burnt) 100%);
+}
+
+/* Pulse animation for in-progress scans */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.animate-pulse-soft {
+  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Smooth progress bar transition */
+.progress-fill {
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}

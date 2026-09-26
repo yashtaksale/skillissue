@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
@@ -384,3 +385,36 @@ def _is_thin_readme(repo_root: Path, name: str) -> bool:
         return True
     badge_lines = sum(1 for ln in stripped_lines if _BADGE_PATTERN.match(ln))
     return badge_lines >= len(stripped_lines) - 1 and len(stripped_lines) < 20
+
+
+# =====================================================================
+# Aggregation: HygieneResult and the full checker (ARCHITECTURE.md §7.5)
+# =====================================================================
+
+
+@dataclass
+class HygieneResult:
+    """Aggregate result of running all hygiene checks on a repo."""
+
+    flags: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {"flags": self.flags}
+
+
+def check_all_hygiene(
+    all_paths: list[str],
+    repo_root: Path | str,
+    *,
+    skip_package_json_check: bool = False,
+) -> HygieneResult:
+    """Run every hygiene check and return a structured HygieneResult.
+
+    This is the entrypoint the orchestrator / aggregator should call.
+    """
+    flags = check(
+        all_paths,
+        repo_root,
+        skip_package_json_check=skip_package_json_check,
+    )
+    return HygieneResult(flags=flags)

@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     github_token: str = ""
     anthropic_api_key: str = ""
     llm_mode: str = "fake"
-    triage_model_id: str
-    fix_model_id: str
+    llm_triage_model: str = "claude-sonnet-4"
+    llm_fix_model: str = "claude-opus-4"
     pipeline_version: str = "0.1.0"
     scanner_image: str = "skillissue/scanner:0.1.0"
 
