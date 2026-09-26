@@ -115,13 +115,13 @@
 
 | Status | ID | Task | Est | Deps | Done when |
 |---|---|---|---|---|---|
-| [ ] | T-3.1 | tree-sitter setup for Python, JavaScript, TypeScript; extract functions/classes/methods with line ranges | 3 | T-1.7 | Unit tests on fixture files; syntax-error files handled without crash |
-| [ ] | T-3.2 | Chunker: size targets, merge small, split large with 20-line overlap, absolute line-numbered rendering, context header | 4 | T-3.1 | Chunks within 2k–6k tokens (estimated); line numbers match source |
-| [ ] | T-3.3 | File scoring: formula, risk-path and entrypoint detectors, test/fixture detectors | 3 | T-2.14, T-1.7 | Ranked list for a fixture repo matches expected order |
-| [ ] | T-3.4 | Greedy selector with budgets, diversity constraints, forced inclusion of chunks holding medium+ signals | 3 | T-3.2, T-3.3 | Never exceeds 30 chunks or 150k tokens; diversity rules verified |
-| [ ] | T-3.5 | Token estimator and budget accounting utility | 1 | T-3.2 | Estimate within 15% of real tokenizer on 5 samples (measure with API count endpoint once) |
-| [ ] | T-3.6 | Secret redaction pass for chunk text; `.env`/key-file exclusion; long-literal truncation | 2 | T-2.5, T-3.2 | Test asserts fake secrets never appear in any chunk text |
-| [ ] | T-3.7 | CLI `sample <dir>` printing chosen chunks with reasons | 1 | T-3.4 | Output explains each selection |
+| [x] | T-3.1 | tree-sitter setup for Python, JavaScript, TypeScript; extract functions/classes/methods with line ranges | 3 | T-1.7 | Unit tests on fixture files; syntax-error files handled without crash |
+| [x] | T-3.2 | Chunker: size targets, merge small, split large with 20-line overlap, absolute line-numbered rendering, context header | 4 | T-3.1 | Chunks within 2k–6k tokens (estimated); line numbers match source |
+| [x] | T-3.3 | File scoring: formula, risk-path and entrypoint detectors, test/fixture detectors | 3 | T-2.14, T-1.7 | Ranked list for a fixture repo matches expected order |
+| [x] | T-3.4 | Greedy selector with budgets, diversity constraints, forced inclusion of chunks holding medium+ signals | 3 | T-3.2, T-3.3 | Never exceeds 30 chunks or 150k tokens; diversity rules verified |
+| [x] | T-3.5 | Token estimator and budget accounting utility | 1 | T-3.2 | Estimate within 15% of real tokenizer on 5 samples (measure with API count endpoint once) |
+| [x] | T-3.6 | Secret redaction pass for chunk text; `.env`/key-file exclusion; long-literal truncation | 2 | T-2.5, T-3.2 | Test asserts fake secrets never appear in any chunk text |
+| [x] | T-3.7 | CLI `sample <dir>` printing chosen chunks with reasons | 1 | T-3.4 | Output explains each selection |
 
 ## P4 — LLM analysis
 
