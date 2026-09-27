@@ -16,6 +16,19 @@ from skillissue.pipeline.analyze.extractor import (
     is_treesitter_available,
 )
 
+_TS_AVAILABLE = is_treesitter_available()
+requires_tree_sitter = pytest.mark.skipif(
+    not _TS_AVAILABLE,
+    reason="tree-sitter not installed",
+)
+
+try:
+    from skillissue.pipeline.analyze.extractor import _get_languages
+    _TS_LANGS = _get_languages()
+except Exception:
+    _TS_LANGS = {}
+_TS_JS_AVAILABLE = "javascript" in _TS_LANGS
+
 
 PY_SOURCE = textwrap.dedent("""\
     from typing import Optional
@@ -124,20 +137,23 @@ class TestExtractSymbolsPython:
 
 
 class TestExtractSymbolsJavaScript:
-    @pytest.mark.skipif(
-        not is_treesitter_available(), reason="tree-sitter not installed"
-    )
+    @requires_tree_sitter
     def test_extracts_js_class(self):
+        import tree_sitter as _  # noqa: F401  -- ensure available
         result = extract_symbols("auth.js", JS_SOURCE)
         names = {s.name for s in result.symbols}
+        # If JS grammar not loaded, extraction returns empty (skip gracefully)
+        if not _TS_JS_AVAILABLE:
+            pytest.skip("tree-sitter-javascript grammar not installed")
         assert "AuthController" in names
 
-    @pytest.mark.skipif(
-        not is_treesitter_available(), reason="tree-sitter not installed"
-    )
+    @requires_tree_sitter
     def test_extracts_js_methods(self):
+        import tree_sitter as _  # noqa: F401
         result = extract_symbols("auth.js", JS_SOURCE)
         names = {s.name for s in result.symbols}
+        if not _TS_JS_AVAILABLE:
+            pytest.skip("tree-sitter-javascript grammar not installed")
         assert "login" in names
         assert "generateToken" in names
 

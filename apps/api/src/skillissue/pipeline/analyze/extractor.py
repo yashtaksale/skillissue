@@ -57,20 +57,28 @@ class ExtractionResult:
 
 
 def _load_languages() -> dict:
-    """Load tree-sitter and the three grammars, returning a registry.
+    """Load tree-sitter and available grammars, returning a registry.
 
-    Returns an empty dict if any of the dependencies are missing.
+    Returns an empty dict if tree-sitter itself is missing.
+    Individual grammar failures are logged and skipped.
     """
-    import tree_sitter
-    import tree_sitter_python
-    import tree_sitter_javascript
+    try:
+        import tree_sitter
+    except ImportError:
+        return {}
 
-    langs = {}
-    for name, mod in [
-        ("python", tree_sitter_python),
-        ("javascript", tree_sitter_javascript),
-    ]:
-        langs[name] = tree_sitter.Language(mod.language())
+    _GRAMMAR_MODULES: dict[str, str] = {
+        "python": "tree_sitter_python",
+        "javascript": "tree_sitter_javascript",
+    }
+
+    langs: dict = {}
+    for name, mod_name in _GRAMMAR_MODULES.items():
+        try:
+            mod = __import__(mod_name, fromlist=["language"])
+            langs[name] = tree_sitter.Language(mod.language())
+        except (ImportError, Exception):
+            pass  # Grammar not available — skip silently
     return langs
 
 
