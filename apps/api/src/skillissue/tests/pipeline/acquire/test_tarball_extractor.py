@@ -14,7 +14,7 @@ from skillissue.pipeline.acquire.extractor import (
 )
 
 
-def _build_tar(name: str, files: dict[str, bytes]) -> Path:
+def _build_tar(name: str | Path, files: dict[str, bytes]) -> Path:
     """Build a .tar.gz in memory from a {path: bytes} dict."""
     out = Path(name)
     with tarfile.open(out, mode="w:gz") as tf:
@@ -84,7 +84,7 @@ class TestCheckMemberName:
 
 
 def test_extracts_normal_files(tmp_path: Path) -> None:
-    tar = _build_tar("good.tar.gz", {
+    tar = _build_tar(tmp_path / "good.tar.gz", {
         "README.md": b"hello",
         "src/main.py": b"print('hi')",
     })
@@ -109,7 +109,7 @@ def test_normalizes_permissions_to_0644(tmp_path: Path) -> None:
     info = tarfile.TarInfo(name="file.sh")
     info.size = 3
     info.mode = 0o755
-    tar = _build_tar("perm.tar.gz", {"file.sh": b"she"})
+    tar = _build_tar(tmp_path / "perm.tar.gz", {"file.sh": b"she"})
 
     safe_extract(tar, tmp_path / "out")
     file_path = tmp_path / "out" / "file.sh"
@@ -152,7 +152,7 @@ def test_rejects_too_many_entries(tmp_path: Path) -> None:
     for i in range(60):
         entries[f"f{i:05d}.txt"] = b"x"
 
-    tar = _build_tar("many.tar.gz", entries)
+    tar = _build_tar(tmp_path / "many.tar.gz", entries)
     with pytest.raises(ExtractError, match="entries"):
         safe_extract(tar, tmp_path / "out", max_entries=50)
 
@@ -173,13 +173,13 @@ def test_rejects_deeply_nested_path(tmp_path: Path) -> None:
 def test_rejects_oversized_uncompressed_total(tmp_path: Path) -> None:
     """20 files × 5 bytes = 100 bytes, limit = 50."""
     entries = {f"f{i}.bin": b"xxxxx" for i in range(20)}
-    tar = _build_tar("huge.tar.gz", entries)
+    tar = _build_tar(tmp_path / "huge.tar.gz", entries)
 
     with pytest.raises(ExtractError, match="exceeds limit"):
         safe_extract(tar, tmp_path / "out", max_total_bytes=50)
 
 
 def test_dest_dir_created(tmp_path: Path) -> None:
-    tar = _build_tar("create.tar.gz", {"x": b"y"})
+    tar = _build_tar(tmp_path / "create.tar.gz", {"x": b"y"})
     safe_extract(tar, tmp_path / "nonexistent" / "subdir")
     assert (tmp_path / "nonexistent" / "subdir" / "x").exists()

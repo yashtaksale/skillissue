@@ -23,20 +23,31 @@ out/
 dist/
 build/
 .cache/
+*.tsbuildinfo
 
 # OS-level
 .DS_Store
 Thumbs.db
+# IDEs & Editor
+.idea/
+.vscode/
 *.swp
 *.swo
 *~
-.idea/
-.vscode/
 *.orig
+*.code-workspace
+.claude/
+.gemini/
 
 # Secrets and env files
 .env
 .env.*
+*.env
+*.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 !.env.example
 !.env.sample
 
@@ -69,3 +80,9 @@ logs/
 
 # Editor config backups
 *~
+
+# Archives & test artifacts
+*.tar.gz
+*.tgz
+*.tar
+*.zip
