@@ -142,7 +142,7 @@ async def _acquire_async(repo_ref: RepoRef, github_token: str) -> dict:
 
         # 1. Fetch the default branch SHA for a reproducible tarball.
         async with httpx.AsyncClient(
-            follow_redirects=True,
+            follow_redirects=False,
             timeout=httpx.Timeout(30, connect=10),
             headers={
                 "Accept": "application/vnd.github+json",

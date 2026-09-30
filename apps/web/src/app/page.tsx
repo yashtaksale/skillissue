@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { startScan, listScans, type ScanRecord } from '@/lib/api'
 import { TierBadge } from '@/components/ui/TierBadge'
+import { ScanningView } from '@/components/scan/ScanningView'
 
 export default function HomePage() {
   const [repo, setRepo] = useState('')
@@ -11,15 +13,30 @@ export default function HomePage() {
   const [scanningId, setScanningId] = useState<string | null>(null)
   const [recent, setRecent] = useState<ScanRecord[]>([])
 
-  // Load recent scans on mount
   useEffect(() => {
-    listScans().then(data => setRecent(data.scans ?? []))
+    listScans().then(data => setRecent(data.scans ?? [])).catch(() => {})
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const trimmed = repo.trim()
+    let trimmed = repo.trim()
     if (!trimmed || loading) return
+
+    // Extract owner/repo if user pasted a full GitHub URL
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      try {
+        const url = new URL(trimmed)
+        if (url.hostname.includes('github.com')) {
+          const parts = url.pathname.split('/').filter(Boolean)
+          if (parts.length >= 2) {
+            trimmed = `${parts[0]}/${parts[1]}`
+            setRepo(trimmed)
+          }
+        }
+      } catch (e) {
+        // Ignore URL parsing errors, let backend validate
+      }
+    }
 
     setLoading(true)
     setError(null)
@@ -33,150 +50,134 @@ export default function HomePage() {
   }
 
   if (scanningId) {
-    return <ScanningPage id={scanningId} onDone={() => { setScanningId(null); setLoading(false) }} />
+    return <ScanningView id={scanningId} onDone={() => { setScanningId(null); setLoading(false) }} />
   }
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-[80vh] px-4">
-      {/* Logo */}
-      <div className="mb-6 text-6xl">🔥</div>
-      <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-center">
-        How <span className="text-orange-500">cooked</span> is your code?
-      </h1>
-      <p className="mt-3 text-lg text-gray-500 text-center max-w-xl">
-        Scan any public GitHub repo for security issues, bugs, performance problems, and hygiene
-        violations. Get a heat score in under a minute.
-      </p>
+    <main className="min-h-screen flex flex-col items-center justify-between px-6 py-10 max-w-5xl mx-auto bg-zinc-950">
+      {/* Top Navbar Header */}
+      <header className="w-full flex items-center justify-between py-4 mb-16 animate-slide-up">
+        <Link href="/" className="flex items-center gap-3 font-semibold text-2xl tracking-tight cursor-pointer hover:opacity-80 transition-opacity">
+          <div className="w-8 h-8 rounded-md bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+            <span className="text-white text-sm font-mono">SI</span>
+          </div>
+          <span>SkillIssue</span>
+        </Link>
+        <span className="text-xs font-mono text-zinc-500 border border-white/10 bg-white/5 px-3 py-1.5 rounded-full">v2.0</span>
+      </header>
 
-      {/* Tier legend */}
-      <div className="flex flex-wrap items-center gap-3 mt-8">
-        {[
-          { name: 'Raw',              color: '#2B6CC4' },
-          { name: 'Lightly Toasted',  color: '#3D8B40' },
-          { name: 'Medium Well',      color: '#C9922B' },
-          { name: 'Cooked',           color: '#CF3626' },
-          { name: 'Burnt to a Crisp', color: '#4A2A22' },
-        ].map(t => (
-          <span key={t.name} className="flex items-center gap-1.5 text-xs">
-            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: t.color }} />
-            {t.name}
-          </span>
-        ))}
+      {/* Main Hero Container */}
+      <div className="w-full flex flex-col items-center text-center my-auto relative z-10 flex-1">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 bg-white/5 text-xs font-mono text-zinc-300 mb-8 animate-slide-up stagger-1 backdrop-blur-sm">
+          <span className="text-white">✦</span> Autonomous Code Security Analysis
+        </div>
+
+        <h1 className="text-5xl sm:text-7xl font-black tracking-tight leading-tight animate-slide-up stagger-2 max-w-4xl">
+          Identify Vulnerabilities Before They <br className="hidden sm:block" />
+          <span className="text-zinc-500">Reach Production.</span>
+        </h1>
+
+        <p className="mt-6 text-base sm:text-lg text-zinc-400 max-w-2xl font-sans leading-relaxed animate-slide-up stagger-3">
+          Perform deep-dive static analysis, hygiene checks, and security audits on any GitHub repository in seconds. Actionable insights, zero configuration.
+        </p>
+
+        {/* Interactive Minimal Form */}
+        <form onSubmit={handleSubmit} className="mt-12 w-full max-w-2xl animate-slide-up stagger-4 relative">
+          <div className="relative group">
+            <div className="relative flex flex-col sm:flex-row gap-3 p-2 rounded-2xl glass-panel">
+              <div className="flex-1 relative">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                  <svg className="w-5 h-5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={repo}
+                  onChange={e => setRepo(e.target.value)}
+                  placeholder="owner/repo (e.g. facebook/react)"
+                  className="w-full bg-transparent text-white pl-12 pr-4 py-3 rounded-xl outline-none placeholder:text-zinc-600 font-mono transition-colors focus:bg-white/5"
+                  disabled={loading}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading || !repo.trim()}
+                className="btn-glow sm:w-auto w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Scanning...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Analyze Repository</span>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+          {error && <p className="mt-3 text-sm text-red-400 font-mono animate-fade-in text-center">{error}</p>}
+        </form>
+
+        {/* Preset Repos */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm font-sans text-zinc-500 animate-slide-up stagger-5">
+          <span>Popular Targets:</span>
+          {['facebook/react', 'psf/requests', 'expressjs/express', 'octocat/Hello-World'].map(r => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setRepo(r)}
+              className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:border-white/30 hover:text-white transition-all hover:bg-white/10"
+            >
+              {r}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Input form */}
-      <form onSubmit={handleSubmit} className="mt-10 w-full max-w-2xl">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={repo}
-            onChange={e => setRepo(e.target.value)}
-            placeholder="owner/repo or https://github.com/owner/repo"
-            className="flex-1 rounded-xl border border-gray-300 dark:border-surface-border bg-white dark:bg-surface-raised
-                       px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50
-                       placeholder:text-gray-400 dark:text-gray-100"
-            disabled={loading}
-            autoFocus
-          />
-          <button
-            type="submit"
-            disabled={loading || !repo.trim()}
-            className="rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed
-                       px-6 py-3 text-sm font-semibold text-white transition-colors"
-          >
-            {loading ? 'Scanning…' : 'Scan'}
-          </button>
-        </div>
-        {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
-      </form>
-
-      {/* Recent scans */}
+      {/* Recent Scans Section */}
       {recent.length > 0 && (
-        <div className="w-full max-w-2xl mt-12">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-4">
-            Recent Scans
-          </h2>
-          <div className="space-y-2">
-            {recent.slice(0, 8).map(scan => (
-              <button
+        <div className="w-full mt-24 pt-10 border-t border-white/5 animate-slide-up stagger-5">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-zinc-400">
+              Recent Analysis Logs
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recent.slice(0, 6).map((scan, idx) => (
+              <Link
                 key={scan.id}
-                onClick={() => { setScanningId(scan.id); setError(null) }}
-                className="w-full flex items-center gap-4 p-3 rounded-xl border border-gray-200 dark:border-surface-border
-                           bg-white dark:bg-surface-raised hover:border-gray-300 dark:hover:border-surface-border
-                           transition-colors text-left"
+                href={`/report/${scan.id}`}
+                className="glass-panel p-5 flex flex-col gap-4 group"
               >
-                <span className="text-sm font-mono text-gray-600 dark:text-gray-400 truncate flex-1">
-                  {scan.repo}
-                </span>
-                <TierBadge scan={scan} />
-                <span className="text-xs text-gray-400">{scan.loc.toLocaleString()} LOC</span>
-              </button>
+                <div className="flex justify-between items-start">
+                  <div className="font-mono text-sm font-semibold text-white truncate group-hover:text-zinc-300 transition-colors">
+                    {scan.repo}
+                  </div>
+                  <TierBadge scan={scan} size="sm" showTagline={false} />
+                </div>
+                <div className="text-xs font-mono text-zinc-500 flex items-center justify-between border-t border-white/5 pt-3">
+                  <span>{scan.files ?? 1} files</span>
+                  <span>{(scan.loc ?? 0).toLocaleString()} LOC</span>
+                </div>
+              </Link>
             ))}
           </div>
         </div>
       )}
-    </main>
-  )
-}
 
-function ScanningPage({ id, onDone }: { id: string; onDone: () => void }) {
-  const [status, setStatus] = useState({ label: 'Queued' as string, progress: 0, message: 'Waiting…' })
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
-    const es = new EventSource(`${apiBase}/api/scans/${id}/stream`)
-
-    es.onmessage = (evt) => {
-      const data = JSON.parse(evt.data)
-      setStatus({
-        label: data.status ?? 'scanning',
-        progress: data.progress ?? status.progress,
-        message: data.message ?? '',
-      })
-      if (data.status === 'complete') {
-        es.close()
-        setTimeout(() => { window.location.href = `/report/${id}` }, 600)
-      }
-      if (data.status === 'failed') {
-        setError(data.error ?? 'Scan failed')
-        es.close()
-      }
-    }
-    return () => es.close()
-  }, [id])
-
-  return (
-    <main className="flex flex-col items-center justify-center min-h-[80vh] px-4">
-      <div className="text-6xl animate-pulse-soft">🔥</div>
-      <h2 className="mt-6 text-2xl font-bold">{error ? 'Scan failed' : 'Scanning your repo…'}</h2>
-
-      {/* Progress bar */}
-      <div className="w-full max-w-xl mt-8">
-        <div className="h-3 rounded-full bg-gray-200 dark:bg-surface-raised overflow-hidden">
-          <div
-            className="h-full rounded-full score-gradient progress-fill"
-            style={{ width: `${Math.max(status.progress, 3)}%` }}
-          />
-        </div>
-        <div className="flex justify-between mt-2 text-xs text-gray-500">
-          <span>{status.message}</span>
-          <span>{status.progress}%</span>
-        </div>
-      </div>
-
-      {error && (
-        <div className="mt-6 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 px-4 py-3 text-sm text-red-700 max-w-xl w-full">
-          {error}
-        </div>
-      )}
-
-      <button
-        onClick={onDone}
-        className="mt-8 text-sm text-gray-500 hover:text-gray-300 transition-colors"
-      >
-        ← Back to home
-      </button>
+      <footer className="w-full mt-24 py-6 text-center text-sm text-zinc-600 border-t border-white/5">
+        SkillIssue &copy; {new Date().getFullYear()} &mdash; Advanced Autonomous Code Health Diagnostics.
+      </footer>
     </main>
   )
 }

@@ -1,12 +1,21 @@
 """Denylist and opt-out checks for repo acquisition."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from skillissue.domain.url.models import RepoRef
 
-# Default denylist (placeholder; real implementation loads from DB/config)
-_DEFAULT_DENYLIST: set[str] = set()
+
+def _load_default_denylist() -> set[str]:
+    """Load the default denylist from the DENYLIST env var (comma-separated)."""
+    raw = os.environ.get("DENYLIST", "")
+    if not raw:
+        return set()
+    return {entry.strip().casefold() for entry in raw.split(",") if entry.strip()}
+
+
+_DEFAULT_DENYLIST: set[str] = _load_default_denylist()
 
 OPTOUT_FILE_NAME = "skillissue-optout"
 

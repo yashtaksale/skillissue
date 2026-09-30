@@ -5,25 +5,31 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // SkillIssue heat palette — tier colors
-        'heat-raw': '#2B6CC4',
-        'heat-toasted': '#3D8B40',
-        'heat-medium': '#C9922B',
-        'heat-cooked': '#CF3626',
-        'heat-burnt': '#4A2A22',
-        // Surface tokens
+        background: '#121212',
         surface: {
-          DEFAULT: '#ffffff',
-          dark: '#0f1117',
-          raised: '#1a1d27',
-          'raised-dark': '#1e2230',
-          border: '#e5e7eb',
-          'border-dark': '#2d3142',
+          DEFAULT: '#18181b',
+          hover: '#27272a',
+          border: '#3f3f46',
         },
       },
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'monospace'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+        display: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.4s ease-out forwards',
+        'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
     },
   },

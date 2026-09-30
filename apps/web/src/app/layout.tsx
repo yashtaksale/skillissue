@@ -20,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen antialiased font-sans">
-        <div className="relative min-h-screen bg-white dark:bg-surface-dark text-gray-900 dark:text-gray-100">
+        <div className="relative min-h-screen bg-[var(--bg)] text-[var(--fg)]">
           {children}
         </div>
       </body>

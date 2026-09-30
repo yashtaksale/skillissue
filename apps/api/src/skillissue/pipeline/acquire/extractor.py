@@ -85,55 +85,82 @@ def safe_extract(
     Raises:
         ExtractError: If any security check fails.
     """
-    dest_dir = Path(dest_dir)
+    dest_dir = Path(dest_dir).resolve()
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    extracted: list[str] = []
-    total_bytes = 0
+    # Use a temp dir for extraction to prevent TOCTOU / symlink races
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="skillissue_extract_", dir=dest_dir.parent) as tmp_extract:
+        tmp_extract_path = Path(tmp_extract)
 
-    with tarfile.open(tarball_path, mode="r:gz") as tf:
-        members = tf.getmembers()
+        extracted: list[str] = []
+        total_bytes = 0
 
-        if len(members) > max_entries:
-            raise ExtractError(
-                f"Tarball has {len(members)} entries, exceeding limit of {max_entries}"
-            )
+        with tarfile.open(tarball_path, mode="r:gz") as tf:
+            members = tf.getmembers()
 
-        for member in members:
-            parts = member.name.split("/")
-            if len(parts) <= strip_components:
-                continue
-            stripped_name = "/".join(parts[strip_components:])
-            if not stripped_name:
-                continue
-
-            _check_member_name(stripped_name)
-
-            if member.type in _SKIP_TYPES:
-                continue
-
-            if member.size > _MAX_SINGLE_FILE:
-                continue
-
-            total_bytes += member.size
-            if total_bytes > max_total_bytes:
+            if len(members) > max_entries:
                 raise ExtractError(
-                    f"Uncompressed total ({total_bytes // (1024 * 1024)} MB) "
-                    f"exceeds limit ({max_total_bytes // (1024 * 1024)} MB)"
+                    f"Tarball has {len(members)} entries, exceeding limit of {max_entries}"
                 )
 
-            dest_path = dest_dir / stripped_name
-            if member.isdir():
-                dest_path.mkdir(parents=True, exist_ok=True)
-                dest_path.chmod(0o755)
-            elif member.isfile():
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
-                source = tf.extractfile(member)
-                if source is None:
+            for member in members:
+                parts = member.name.split("/")
+                if len(parts) <= strip_components:
                     continue
-                data = source.read()
-                dest_path.write_bytes(data)
-                dest_path.chmod(0o644)
-                extracted.append(stripped_name)
+                stripped_name = "/".join(parts[strip_components:])
+                if not stripped_name:
+                    continue
+
+                _check_member_name(stripped_name)
+
+                if member.type in _SKIP_TYPES:
+                    # Explicitly skip symlinks, hardlinks, device files, etc.
+                    continue
+
+                if member.size > _MAX_SINGLE_FILE:
+                    continue
+
+                total_bytes += member.size
+                if total_bytes > max_total_bytes:
+                    raise ExtractError(
+                        f"Uncompressed total ({total_bytes // (1024 * 1024)} MB) "
+                        f"exceeds limit ({max_total_bytes // (1024 * 1024)} MB)"
+                    )
+
+                dest_path = tmp_extract_path / stripped_name
+
+                # Security: ensure dest_path stays within tmp_extract_path
+                try:
+                    dest_path.relative_to(tmp_extract_path)
+                except ValueError:
+                    raise ExtractError(f"Path traversal attempt detected: {stripped_name}")
+
+                if member.isdir():
+                    dest_path.mkdir(parents=True, exist_ok=True)
+                    dest_path.chmod(0o755)
+                elif member.isfile():
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    source = tf.extractfile(member)
+                    if source is None:
+                        continue
+                    data = source.read()
+                    dest_path.write_bytes(data)
+                    dest_path.chmod(0o644)
+                    extracted.append(stripped_name)
+
+        # Atomically move extracted files to final destination
+        for rel_path in extracted:
+            src = tmp_extract_path / rel_path
+            dst = dest_dir / rel_path
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if src.is_dir():
+                if dst.exists():
+                    import shutil
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            else:
+                import shutil
+                shutil.move(str(src), str(dst))
 
     return extracted

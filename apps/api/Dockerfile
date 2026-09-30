@@ -1,12 +1,12 @@
 # ===== Stage 1: Build =====
-FROM python:3.12-slim@sha256:7c3e3e7c3e3e3e7c3e3e7c3e3e7c3e3e7c3e3e7c3e3e7c3e3e7c3e3e7 AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /build
 COPY pyproject.toml .
-RUN pip install --no-cache-dir --prefix=/install -r <(python -c "import tomllib; t=tomllib.load(open('pyproject.toml','rb')); print('\n'.join(t.get('project',{}).get('dependencies',[])))") 2>/dev/null || pip install --no-cache-dir --prefix=/install fastapi pydantic sqlalchemy alembic asyncpg redis rq httpx structlog python-dotenv
+RUN pip install --no-cache-dir --prefix=/install -r <(python -c "import tomllib; t=tomllib.load(open('pyproject.toml','rb')); print('\n'.join(t.get('project',{}).get('dependencies',[])))" ) 2>/dev/null || pip install --no-cache-dir --prefix=/install fastapi pydantic sqlalchemy alembic asyncpg redis rq httpx structlog python-dotenv
 
 # ===== Stage 2: Runtime =====
-FROM python:3.12-slim@sha256:7c3e3e7c3e3e7c3e3e7c3e3e7c3e3e7c3e3e7c3e3e7c3e3e7c3e3e7 AS runtime
+FROM python:3.12-slim AS runtime
 
 RUN groupadd -r skillissue && useradd -r -g skillissue -d /home/skillissue -s /sbin/nologin skillissue \
     && mkdir -p /home/skillissue /app \
@@ -15,7 +15,7 @@ RUN groupadd -r skillissue && useradd -r -g skillissue -d /home/skillissue -s /s
 COPY --from=builder /install /usr/local
 
 WORKDIR /app
-COPY src/skillissue/src/ src/skillissue/src/  # populated at build time via docker-compose
+COPY src/skillissue/ src/skillissue/
 
 USER skillissue
 EXPOSE 8000

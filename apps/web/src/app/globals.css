@@ -2,48 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 :root {
-  --bg: #ffffff;
-  --fg: #0f1117;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --raised: #f9fafb;
+  --bg-primary: #121212;
+  --fg-primary: #e4e4e7;
+  --fg-secondary: #a1a1aa;
 }
 
-.dark {
-  --bg: #0f1117;
-  --fg: #f3f4f6;
-  --muted: #9ca3af;
-  --border: #2d3142;
-  --raised: #1a1d27;
+body {
+  background-color: var(--bg-primary);
+  color: var(--fg-primary);
+  overflow-x: hidden;
+  font-family: 'Inter', sans-serif;
+  background-image: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.04) 0%, transparent 50%);
+  background-attachment: fixed;
 }
 
-html, body {
-  background: var(--bg);
-  color: var(--fg);
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+/* ── Typography Utilities ────────────────────────────── */
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ── Minimalist Cards ────────────────────────────── */
+.glass-panel {
+  background: rgba(30, 30, 30, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
-/* Score gauge gradient */
-.score-gradient {
-  background: linear-gradient(90deg,
-    var(--heat-raw) 0%,
-    var(--heat-toasted) 25%,
-    var(--heat-medium) 50%,
-    var(--heat-cooked) 75%,
-    var(--heat-burnt) 100%);
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
-/* Pulse animation for in-progress scans */
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-.animate-pulse-soft {
-  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+/* ── Clean Button ────────────────────────────── */
+.btn-glow {
+  background: #e4e4e7;
+  color: #121212;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-/* Smooth progress bar transition */
-.progress-fill {
-  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+.btn-glow:hover { 
+  background: #ffffff; 
+  transform: translateY(-1px);
+}
+.btn-glow:active { 
+  transform: translateY(0); 
+}
+
+/* ── Custom Scrollbar ────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Micro-Animations ────────────────────────────── */
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+
+/* Refined text gradient for primary headings */
+.text-gradient {
+  background: linear-gradient(180deg, #f4f4f5 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }

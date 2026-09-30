@@ -146,8 +146,8 @@ def _excluded_file(path: Path) -> bool:
     return False
 
 
-def _sha1_of(path: Path) -> str:
-    h = hashlib.sha1()
+def _sha256_of(path: Path) -> str:
+    h = hashlib.sha256()
     with open(path, "rb") as fh:
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
@@ -239,14 +239,14 @@ def walk(source_dir: Path | str) -> WalkResult:
             if total_lines > _MAX_FILE_LINES:
                 continue
 
-            sha1 = _sha1_of(full_path)
+            sha256 = _sha256_of(full_path)
 
             files.append(FileInfo(
                 path=rel_str,
                 lang=lang,
                 loc=loc,
                 bytes=stat.st_size,
-                sha1=sha1,
+                sha1=sha256,
             ))
 
     return WalkResult(files=files, manifests=manifests)

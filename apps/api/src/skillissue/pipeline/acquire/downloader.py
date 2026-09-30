@@ -80,7 +80,7 @@ async def download_tarball(
 
         if _client is None:
             client = httpx.AsyncClient(
-                follow_redirects=True,
+                follow_redirects=False,
                 timeout=httpx.Timeout(
                     _DOWNLOAD_TIMEOUT, connect=10, write=_DOWNLOAD_TIMEOUT
                 ),
@@ -91,10 +91,24 @@ async def download_tarball(
             owns_client = False
 
         try:
-            # `client.stream()` returns an async context manager directly,
-            # not a coroutine — do not `await` it. The fake test client wraps
-            # its response in a context manager too, so this works in tests.
-            async with client.stream("GET", url, headers=headers) as response:
+            # First request to get the redirect URL without following it automatically
+            resp = await client.get(url, headers=headers)
+            if resp.status_code in (301, 302, 307, 308):
+                redirect_url = resp.headers.get("Location")
+                if not redirect_url:
+                    raise DownloadError("Redirect missing Location header")
+                
+                # Enforce safe domain for redirect (mitigate SSRF)
+                if not redirect_url.startswith("https://codeload.github.com/"):
+                    raise DownloadError(f"Unsafe redirect target: {redirect_url}")
+                
+                # Use the safe redirect URL
+                target_url = redirect_url
+            else:
+                resp.raise_for_status()
+                target_url = url
+
+            async with client.stream("GET", target_url, headers=headers) as response:
                 response.raise_for_status()
 
                 sha256 = hashlib.sha256()

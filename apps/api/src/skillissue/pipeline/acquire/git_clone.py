@@ -1,6 +1,7 @@
 """Hardened git clone fallback for tarball download failures."""
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -45,14 +46,20 @@ def git_clone(
     if shutil.which("git") is None:
         raise CloneError("git is not installed on this system")
 
+    import re
+    if not re.match(r"^[a-zA-Z0-9_.-]+$", owner) or not re.match(r"^[a-zA-Z0-9_.-]+$", repo):
+        raise CloneError("Invalid characters in repository owner or name")
+
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     clone_url = f"https://github.com/{owner}/{repo}.git"
 
-    git_env = {
+    # Only pass safe, minimal environment — never leak tokens or secrets
+    safe_env = {
+        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        "HOME": "/nonexistent",
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "HOME": "/nonexistent",
     }
 
     git_cmd = [
@@ -73,7 +80,7 @@ def git_clone(
     try:
         result = subprocess.run(
             git_cmd,
-            env={**git_env, **dict(__import__("os").environ)},
+            env=safe_env,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -89,7 +96,7 @@ def git_clone(
     # Checkout the specific SHA
     checkout_result = subprocess.run(
         ["git", "-C", str(dest_dir), "checkout", "--force", sha],
-        env=git_env,
+        env=safe_env,
         capture_output=True,
         text=True,
         timeout=timeout // 2,

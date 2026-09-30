@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: skillissue
-      POSTGRES_PASSWORD: skillissue
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillissue}
       POSTGRES_DB: skillissue
     ports:
       - "127.0.0.1:5432:5432"
@@ -25,14 +25,17 @@ services:
       interval: 5s
       retries: 5
 
+
+
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      - DATABASE_URL=postgresql+asyncpg://skillissue:skillissue@postgres:5432/skillissue
+      - DATABASE_URL=postgresql+asyncpg://skillissue:${POSTGRES_PASSWORD:-skillissue}@postgres:5432/skillissue
       - REDIS_URL=redis://redis:6379/0
       - LLM_MODE=fake
+      - SITE_URL=${SITE_URL:-http://localhost:3000}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -40,14 +43,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["uvicorn", "skillissue.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "skillissue.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
 
   worker:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      - DATABASE_URL=postgresql+asyncpg://skillissue:skillissue@postgres:5432/skillissue
+      - DATABASE_URL=postgresql+asyncpg://skillissue:${POSTGRES_PASSWORD:-skillissue}@postgres:5432/skillissue
       - REDIS_URL=redis://redis:6379/0
       - LLM_MODE=fake
     depends_on:
